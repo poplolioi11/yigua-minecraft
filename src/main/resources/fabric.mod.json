@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "yigua",
+  "version": "${version}",
+  "name": "一卦 Minecraft",
+  "description": "三錢、竹籌、武英殿爻辭、個人卦象圖鑑與易經總覽書。",
+  "authors": ["一卦 yigua.art / poplolioi11"],
+  "contact": {"homepage": "https://yigua.art/"},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["art.yigua.minecraft.YiguaMod"],
+    "client": ["art.yigua.minecraft.client.YiguaClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

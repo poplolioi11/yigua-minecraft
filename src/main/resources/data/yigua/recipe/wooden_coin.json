@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "#minecraft:planks"
+  ],
+  "result": {
+    "id": "yigua:wooden_coin",
+    "count": 3
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:gold_ingot"
+  ],
+  "result": {
+    "id": "yigua:gold_coin",
+    "count": 3
+  }
+}

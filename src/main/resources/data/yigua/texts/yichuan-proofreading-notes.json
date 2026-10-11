@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-10-09",
+  "comparedSiteVersion": "1.3.5",
+  "attribution": "yigua.art網站轉譯",
+  "method": "AI輔助影像辨讀與程式檢查；非人工專家審定，模型間同意不作為史料證據。只列本輪取得指定影像或可識別旁證的局部紀錄，非全書二校。",
+  "rights": "古籍公有領域原文不受本站授權限制。本站具原創性的說明採CC BY 4.0，允許商用及改作，須署名、附授權連結並註明修改；不對他人掃描或原文主張權利。請保留來源與校核範圍。",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "records": [
+    {
+      "id": "ZH-002",
+      "hexagram": 32,
+      "name": "恒",
+      "edition": "程頤《伊川易傳》・文淵閣四庫本",
+      "status": "retained",
+      "title": "保留底本的「利貞有攸往」",
+      "observation": "指定影像第283頁（紙本9-278上幅）清楚作「恒亨无咎利貞有攸往」，貞後直接接有，沒有第二個利。本站提供稿與該句相符。",
+      "action": "不採用「本站漏抄一利」的修訂建議，保留該底本原字。",
+      "limit": "這是本站與指定影像的局部一致，不表示各本皆同，也不裁定通行經文應如何寫；程傳其餘初稿仍待二校。",
+      "sources": [
+        {
+          "label": "四庫第9冊 · 影像283／紙本9-278",
+          "url": "https://commons.wikimedia.org/w/index.php?title=File:文淵閣四庫全書_0009冊.djvu&page=283"
+        }
+      ]
+    },
+    {
+      "id": "ZH-026",
+      "hexagram": 32,
+      "name": "恒",
+      "edition": "程頤《伊川易傳》・提供稿卷次欄位",
+      "status": "partial",
+      "title": "卷次欄位與影像不符",
+      "observation": "恒卦指定影像中縫題《伊川易傳》卷三、第十葉；提供稿juan欄位標卷二。",
+      "action": "在此記錄定位訂正：恒卦應依該影像定位於卷三十葉。保留原下載初稿與其雜湊，不把單頁核查當作31至46卦卷次已全面訂正。",
+      "limit": "下載稿仍有舊卷次欄位，引用本卦時請同時參看本紀錄。其餘卦的卷次與全文尚待核對。",
+      "sources": [
+        {
+          "label": "四庫第9冊 · 影像283中縫卷次",
+          "url": "https://commons.wikimedia.org/w/index.php?title=File:文淵閣四庫全書_0009冊.djvu&page=283"
+        }
+      ]
+    }
+  ]
+}

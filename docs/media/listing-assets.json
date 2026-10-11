@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "asset": "project-icon-400.png",
+  "width": 400,
+  "height": 400,
+  "logicalGrid": [
+    40,
+    40
+  ],
+  "rendering": "Original geometric pixels; nearest-neighbor integer enlargement; no input image or font.",
+  "hexagram": {
+    "number": 11,
+    "name": "泰",
+    "mask": 7,
+    "bottomLineBit": 0
+  },
+  "authorship": "Composition and generator authored with generative AI; pixels computed deterministically. Not claimed as human-drawn.",
+  "license": "MIT",
+  "attribution": "poplolioi11 / Yigua yigua.art",
+  "intendedUse": "CurseForge and Nexus submission candidate; no platform approval or Modrinth eligibility claimed.",
+  "sha256": "82f354bfe556084986ac20120ceda3c65353f6de81c6e19d7b4dd33950bc2315",
+  "previewSha256": "c60333b2978b77b9cac64f5bdcd5d197ce6f7aba9b451e3acd6a511dcde543b1"
+}

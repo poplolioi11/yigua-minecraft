@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "#yigua:long_stalk_plants",
+    "#yigua:long_stalk_plants",
+    "minecraft:string"
+  ],
+  "result": {
+    "id": "yigua:grass_stalks",
+    "count": 1
+  }
+}

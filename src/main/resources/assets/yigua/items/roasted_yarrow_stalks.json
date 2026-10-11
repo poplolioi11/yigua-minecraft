@@ -1,0 +1,12 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "yigua:item/yarrow_stalks",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": 12684114
+      }
+    ]
+  }
+}

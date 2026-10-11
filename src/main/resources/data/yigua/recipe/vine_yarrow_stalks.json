@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:bamboo",
+    "minecraft:bamboo",
+    "minecraft:vine"
+  ],
+  "result": {
+    "id": "yigua:vine_yarrow_stalks",
+    "count": 1
+  }
+}

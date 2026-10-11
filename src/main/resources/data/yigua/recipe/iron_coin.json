@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "yigua:iron_coin",
+    "count": 3
+  }
+}

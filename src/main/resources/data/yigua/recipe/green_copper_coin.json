@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:oxidized_copper"
+  ],
+  "result": {
+    "id": "yigua:green_copper_coin",
+    "count": 27
+  }
+}

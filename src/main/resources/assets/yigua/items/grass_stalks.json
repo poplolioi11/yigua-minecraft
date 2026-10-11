@@ -1,0 +1,12 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "yigua:item/grass_stalks",
+    "tints": [
+      {
+        "type": "minecraft:constant",
+        "value": 14083752
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:book",
+    "minecraft:bamboo"
+  ],
+  "result": {
+    "id": "yigua:hexagram_atlas",
+    "count": 1
+  }
+}

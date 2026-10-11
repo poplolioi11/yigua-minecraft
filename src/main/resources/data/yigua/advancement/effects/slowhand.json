@@ -1,0 +1,29 @@
+{
+  "display": {
+    "icon": {
+      "id": "minecraft:cobweb"
+    },
+    "title": {
+      "text": "遲滯"
+    },
+    "description": {
+      "text": "正式起卦取得「遲滯」的遊戲效果。"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "obtained": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "obtained"
+    ]
+  ],
+  "sends_telemetry_event": false,
+  "parent": "yigua:effects/quick"
+}

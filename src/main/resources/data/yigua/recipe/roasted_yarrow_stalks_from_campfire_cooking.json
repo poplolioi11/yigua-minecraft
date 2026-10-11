@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:campfire_cooking",
+  "cookingtime": 600,
+  "experience": 0.1,
+  "ingredient": "yigua:yarrow_stalks",
+  "result": {
+    "id": "yigua:roasted_yarrow_stalks",
+    "count": 1
+  }
+}

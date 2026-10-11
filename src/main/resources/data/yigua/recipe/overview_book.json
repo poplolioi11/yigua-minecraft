@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:book",
+    "yigua:copper_coin"
+  ],
+  "result": {
+    "id": "yigua:overview_book",
+    "count": 1
+  }
+}

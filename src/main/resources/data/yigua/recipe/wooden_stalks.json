@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:stick",
+    "minecraft:stick",
+    "minecraft:string"
+  ],
+  "result": {
+    "id": "yigua:wooden_stalks",
+    "count": 1
+  }
+}

@@ -1,0 +1,65 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+    from('LICENSE')
+    from('PROVENANCE.md')
+}
+
+tasks.register('coreSelfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'art.yigua.core.CoreSelfTest'
+}
+check.dependsOn coreSelfTest
+
+// 本專案使用可直接執行的自測，無 JUnit 引擎或空的測試套件。
+test { enabled = false }
+
+['librarySelfTest': 'art.yigua.minecraft.LibrarySelfTest',
+ 'sharingSelfTest': 'art.yigua.minecraft.SharingSelfTest',
+ 'ritualInteractionSelfTest': 'art.yigua.minecraft.client.RitualInteractionSelfTest',
+ 'bookSelfTest': 'art.yigua.minecraft.BookSelfTest',
+ 'ledgerSelfTest': 'art.yigua.minecraft.LedgerSelfTest',
+ 'rareFortuneSelfTest': 'art.yigua.minecraft.RareFortuneSelfTest',
+ 'movingFortuneSelfTest': 'art.yigua.minecraft.MovingFortuneSelfTest',
+ 'specialFortuneSelfTest': 'art.yigua.minecraft.SpecialFortuneSelfTest',
+ 'skyOmenPayloadSelfTest': 'art.yigua.minecraft.SkyOmenPayloadSelfTest',
+ 'temporaryWaterCorridorSelfTest': 'art.yigua.minecraft.TemporaryWaterCorridorSelfTest',
+ 'manualCastingSelfTest': 'art.yigua.minecraft.ManualCastingSelfTest'].each { taskName, entry ->
+    tasks.register(taskName, JavaExec) {
+        dependsOn testClasses
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = entry
+    }
+    check.dependsOn taskName
+}
+
+tasks.register('verifyData', Exec) {
+    commandLine 'python3', 'tools/verify_data.py'
+}
+check.dependsOn verifyData

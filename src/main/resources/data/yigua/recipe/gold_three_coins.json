@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "yigua:gold_coin",
+    "yigua:gold_coin",
+    "yigua:gold_coin"
+  ],
+  "result": {
+    "id": "yigua:gold_three_coins",
+    "count": 1
+  }
+}
