@@ -33,6 +33,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -43,14 +44,18 @@ import org.slf4j.Logger;
 
 /** 有界的暫時分海；紀錄先落盤，任何非原版水／自有空氣都不覆寫。 */
 public final class TemporaryWaterCorridor {
-    static final int WIDTH = 3;
-    static final int HEIGHT = 4;
+    static final int WIDTH = 9;
     static final int LENGTH = 12;
     static final int DURATION_TICKS = 400;
-    static final int MAX_BLOCKS = WIDTH * HEIGHT * LENGTH;
+    static final int MAX_DURATION_TICKS = 12000;
+    static final int MAX_BLOCKS = 32768;
     private static final int SCHEMA_VERSION = 1;
-    private static final int MAX_JOURNAL_BYTES = 64 * 1024;
-    private static final int MAX_CHUNKS = 4;
+    static final int MAX_JOURNAL_BYTES = 8 * 1024 * 1024;
+    static final int MAX_CHUNKS = 32;
+    static final int SCAN_BUDGET = 2048;
+    static final int AUDIT_BUDGET = 256;
+    static final int RESTORE_BUDGET = 512;
+    static final int EXPAND_BUDGET = 512;
     private static final int MAX_SAFE_DROP = 8;
     // 不發鄰居／形狀更新，不讓移水連帶破壞水生植物、waterlogged 方塊。
     private static final int UPDATE_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
@@ -74,14 +79,28 @@ public final class TemporaryWaterCorridor {
     private static final class Session {
         UUID playerId;
         Journal journal;
+        final String dimension;
         final int startedTick;
-        boolean restoring;
-        int retryTick;
+        final int durationTicks;
+        boolean restoring, limitNotified, boundaryNotified;
+        int retryTick, auditCursor, restoreCursor, columnCursor, scanY, scanTop, nextScanTick;
+        BlockPos origin;
+        Direction direction;
+        List<BlockPos> columns = List.of();
+        final Map<BlockPos, Entry> owned = new HashMap<>();
+        final Set<ChunkPos> chunks = new HashSet<>();
         Session(Journal journal, int tick, boolean restoring) {
-            this.journal = journal;
-            this.startedTick = tick;
-            this.restoring = restoring;
-            this.retryTick = tick;
+            this(journal, journal.dimension(), tick, DURATION_TICKS, restoring);
+        }
+        Session(Journal journal, String dimension, int tick, int durationTicks, boolean restoring) {
+            this.dimension = dimension; this.startedTick = tick; this.durationTicks = durationTicks;
+            this.restoring = restoring; this.retryTick = tick; install(journal);
+        }
+        void install(Journal next) {
+            journal = next; owned.clear(); chunks.clear();
+            for (Entry entry : next.entries()) { owned.put(entry.pos(), entry); chunks.add(entry.chunk()); }
+            if (next.entries().isEmpty()) auditCursor = restoreCursor = 0;
+            else { auditCursor = Math.floorMod(auditCursor, next.entries().size()); restoreCursor = Math.floorMod(restoreCursor, next.entries().size()); }
         }
     }
 
@@ -111,146 +130,293 @@ public final class TemporaryWaterCorridor {
         }
     }
 
-    /** 水域從玩家前方一格開始；同一伺服器同時最多一個走廊。 */
+    /** 寬九格、前方十一格、向上所有原版水；已開水道保留至原期限。 */
     public static boolean start(ServerPlayer player) {
+        return start(player, DURATION_TICKS);
+    }
+
+    public static boolean start(ServerPlayer player, int durationTicks) {
         Objects.requireNonNull(player, "玩家不得為空");
         ServerLevel level = (ServerLevel)player.level();
         MinecraftServer server = level.getServer();
         if (!available || owner != server || session != null || !server.isSameThread()
-                || !player.isAlive() || player.isSpectator()) return false;
-        BlockPos feet = player.blockPosition();
-        Direction forward = player.getDirection();
-        if (forward.getAxis().isVertical() || feet.getY() < level.getMinY() + HEIGHT
-                || feet.getY() > level.getMaxY() - (HEIGHT - 1)) return false;
-        Direction side = forward.getClockWise();
-        List<Entry> entries = new ArrayList<>();
-        for (int distance = 1; distance <= LENGTH; distance++) {
-            for (int lane = -1; lane <= 1; lane++) {
-                BlockPos column = feet.relative(forward, distance).relative(side, lane);
-                if (!safeColumn(level, column)) return false;
-                for (int height = 0; height < HEIGHT; height++) {
-                    BlockPos pos = column.above(height);
-                    BlockState state = level.getBlockState(pos);
-                    if (state.is(Blocks.WATER)) entries.add(new Entry(pos.getX(), pos.getY(), pos.getZ(),
-                        state.getValue(LiquidBlock.LEVEL), true));
-                }
-            }
-        }
-        if (entries.isEmpty()) return false;
-        Journal planned = new Journal(level.dimension().identifier().toString(), entries);
-        try {
-            // 整份 write-ahead journal 成功且原子置換後，才允許第一個方塊修改。
-            writeJournal(journalFile, planned);
-        } catch (IOException | RuntimeException error) {
-            available = false;
-            LOGGER.error("分海紀錄寫入失敗，未修改世界：{}", journalFile, error);
-            return false;
-        }
-        session = new Session(planned, server.getTickCount(), false);
+                || !WorldChangePolicy.enabled() || !activePlayer(player)
+                || !validDuration(durationTicks)) return false;
+        String dimension = level.dimension().identifier().toString();
+        session = new Session(EMPTY, dimension, server.getTickCount(), durationTicks, false);
         session.playerId = player.getUUID();
         try {
-            for (Entry entry : entries) {
-                BlockPos pos = entry.pos();
-                if (!level.getBlockState(pos).is(Blocks.WATER)
-                        || !level.setBlock(pos, Blocks.AIR.defaultBlockState(), UPDATE_FLAGS)) {
-                    throw new IllegalStateException("分海方塊未能安全移開：" + pos);
-                }
-            }
+            advance(level, player);
+            // 合法乾地起效也保留 session，等待兩分鐘內自然走入水域；不重設期限。
             return true;
-        } catch (RuntimeException error) {
+        } catch (IOException | RuntimeException error) {
             LOGGER.error("分海未完整建立，立即嘗試復原。", error);
             restoreAll(server);
             return false;
         }
     }
 
-    /** 以伺服器刻計時，玩家離線或切換維度不延長事件。 */
+    /** 到期、停用、死亡、離線或切換維度即收回；移動／轉向不延長時間。 */
     public static void tick(MinecraftServer server) {
         if (server != owner || session == null) return;
-        if (session.restoring || server.getTickCount() - session.startedTick >= DURATION_TICKS) {
+        if (session.restoring || expired(server.getTickCount(), session.startedTick, session.durationTicks)) {
             if (server.getTickCount() - session.retryTick >= 0) restoreAll(server);
             return;
         }
-        ServerLevel level = findLevel(server, session.journal.dimension());
-        if (level == null) { restoreAll(server); return; }
+        ServerPlayer player = server.getPlayerList().getPlayer(session.playerId);
+        ServerLevel level = findLevel(server, session.dimension);
+        if (!WorldChangePolicy.enabled() || player == null || !activePlayer(player)
+                || level == null || player.level() != level) { restoreAll(server); return; }
         try {
-            List<Entry> next = new ArrayList<>();
-            Map<Entry, BlockState> released = new LinkedHashMap<>();
-            for (Entry entry : session.journal.entries()) {
-                if (!entry.wantedAir()) { next.add(entry); continue; }
-                if (!loaded(level, entry.pos())) { restoreAll(server); return; }
-                BlockState state = level.getBlockState(entry.pos());
-                if (!state.is(Blocks.WATER) && !state.is(Blocks.AIR)) {
-                    next.add(entry.release());
-                    released.put(entry, state);
-                } else next.add(entry);
-            }
-            if (!released.isEmpty()) {
-                // 先確保玩家／其他模組的替代方塊也已保存，再永久撤銷這些座標所有權。
-                flushAndVerify(level, released);
-                Journal updated = new Journal(session.journal.dimension(), next);
-                writeJournal(journalFile, updated);
-                session.journal = updated;
-            }
-            for (Entry entry : session.journal.entries()) {
-                if (entry.wantedAir() && level.getBlockState(entry.pos()).is(Blocks.WATER)
-                        && !level.setBlock(entry.pos(), Blocks.AIR.defaultBlockState(), UPDATE_FLAGS)) {
-                    throw new IllegalStateException("分海回填水未能安全移開");
-                }
-            }
+            auditOwnership(level);
+            advance(level, player);
         } catch (IOException | RuntimeException error) {
-            LOGGER.error("分海維持或所有權保存失敗，立即結束並復原。", error);
+            LOGGER.error("分海所有權／寫前保存失敗，保留紀錄並開始有界復原。", error);
             restoreAll(server);
         }
     }
 
-    /** STOPPING／到期皆呼叫；復原與保存成功之前絕不清空 journal。 */
+    private static void auditOwnership(ServerLevel level) throws IOException {
+        List<Entry> entries = session.journal.entries();
+        if (entries.isEmpty()) return;
+        Map<BlockPos, Entry> replacements = new HashMap<>();
+        Map<Entry, BlockState> changed = new LinkedHashMap<>();
+        for (int n = 0; n < Math.min(AUDIT_BUDGET, entries.size()); n++) {
+            Entry entry = entries.get(session.auditCursor++ % entries.size());
+            if (!entry.wantedAir() || !loaded(level, entry.pos())) continue;
+            BlockState state = level.getBlockState(entry.pos());
+            // 已開 AIR 後，任何重新放入的方塊或水（包括相同 LEVEL）都撤權，不再清除。
+            if (!state.is(Blocks.AIR)) { replacements.put(entry.pos(), entry.release()); changed.put(entry, state); }
+        }
+        session.auditCursor = Math.floorMod(session.auditCursor, entries.size());
+        if (replacements.isEmpty()) return;
+        flushAndVerify(level, changed);
+        Journal next = journal(session.dimension, entries.stream().map(e -> replacements.getOrDefault(e.pos(), e)).toList());
+        writeJournal(journalFile, next); session.install(next);
+    }
+
+    /** journal 仍保留的每格都預留，含撤權格／到期／待復原，避免其他暫態事件取得同格。 */
+    public static boolean claims(ServerLevel level, BlockPos pos) {
+        return session != null && level != null && pos != null && owner == level.getServer()
+            && session.dimension.equals(level.dimension().identifier().toString())
+            && session.owned.containsKey(pos);
+    }
+
+    static boolean claimedPosition(Journal journal, BlockPos pos) {
+        return journal.entries().stream().anyMatch(entry -> entry.x() == pos.getX() && entry.y() == pos.getY() && entry.z() == pos.getZ());
+    }
+
+    /** 只阻擋原版自然水流回灌自有空氣；桶裝水／其他來源 setBlock 不經此入口。 */
+    public static boolean blocksNaturalWaterFlow(ServerLevel level, BlockPos pos) {
+        if (session == null || level == null || pos == null
+                || owner != level.getServer() || !owner.isSameThread()
+                || !level.dimension().identifier().toString().equals(session.dimension)
+                || !session.owned.containsKey(pos) || !session.owned.get(pos).wantedAir() || !loaded(level, pos)
+                || !level.getBlockState(pos).is(Blocks.AIR)) return false;
+        ServerPlayer player = session.playerId == null ? null : owner.getPlayerList().getPlayer(session.playerId);
+        if (session.restoring || expired(owner.getTickCount(), session.startedTick, session.durationTicks) || !WorldChangePolicy.enabled())
+            return (player == null || WorldChangePolicy.permission(level, player, pos)) && level.getBlockState(pos).is(Blocks.AIR);
+        return player != null && activePlayer(player) && player.level() == level
+            && WorldChangePolicy.allow(player, pos) && level.getBlockState(pos).is(Blocks.AIR);
+    }
+
+    static boolean ownsAir(Journal journal, BlockPos pos) {
+        return journal.entries().stream().anyMatch(entry -> entry.wantedAir() && entry.x() == pos.getX() && entry.y() == pos.getY() && entry.z() == pos.getZ());
+    }
+
+    static boolean validDuration(int ticks) { return ticks > 0 && ticks <= MAX_DURATION_TICKS; }
+
+    static boolean expired(int now, int started, int duration) { return now - started >= duration; }
+
+    static boolean recoveryDue(boolean restoring, int now, int retryTick) { return !restoring || now - retryTick >= 0; }
+
+    private static boolean activePlayer(ServerPlayer player) {
+        return player.isAlive() && !player.isRemoved() && !player.isSpectator() && !player.hasDisconnected();
+    }
+
+    /** 純水平幾何，腳下正中優先；每列向上範圍由真世界已載入 surface 決定。 */
+    static List<BlockPos> columns(BlockPos feet, Direction forward) {
+        if (forward.getAxis().isVertical()) throw invalid("走廊方向必須水平");
+        List<BlockPos> positions = new ArrayList<>(WIDTH * LENGTH);
+        Direction side = forward.getClockWise();
+        for (int distance = 0; distance < LENGTH; distance++) {
+            positions.add(feet.relative(forward, distance));
+            for (int lane = 1; lane <= WIDTH / 2; lane++) {
+                positions.add(feet.relative(forward, distance).relative(side, lane));
+                positions.add(feet.relative(forward, distance).relative(side, -lane));
+            }
+        }
+        return List.copyOf(positions);
+    }
+
+    interface ExpansionAccess {
+        void commit(Journal journal) throws IOException;
+        Entry capture(BlockPos pos);
+        void open(List<Entry> added) throws IOException;
+    }
+    record ExpansionResult(Journal journal, boolean limited) {}
+
+    /** 累積 transaction：新水 WAL 成功後才開；舊 AIR／撤權格都不可隨移動釋放。 */
+    static ExpansionResult expand(Journal before, String dimension, List<BlockPos> candidates, ExpansionAccess access) throws IOException {
+        validate(before);
+        if (!before.entries().isEmpty() && !before.dimension().equals(dimension)) throw invalid("不能跨維度轉移紀錄");
+        if (candidates.size() > SCAN_BUDGET || new HashSet<>(candidates).size() != candidates.size()) throw invalid("候選批次超量或重複");
+        List<Entry> entries = new ArrayList<>(before.entries()), added = new ArrayList<>();
+        Set<BlockPos> occupied = new HashSet<>(); Set<ChunkPos> chunks = new HashSet<>();
+        for (Entry e : entries) { occupied.add(e.pos()); chunks.add(e.chunk()); }
+        boolean limited = false;
+        for (BlockPos pos : candidates) {
+            if (occupied.contains(pos)) continue;
+            Entry capture = access.capture(pos);
+            if (capture == null) continue;
+            if (!capture.pos().equals(pos) || !capture.wantedAir()) throw invalid("新水域紀錄不符候選");
+            if (entries.size() >= MAX_BLOCKS || !chunks.contains(capture.chunk()) && chunks.size() >= MAX_CHUNKS) { limited = true; continue; }
+            entries.add(capture); added.add(capture); occupied.add(pos); chunks.add(capture.chunk());
+            if (added.size() >= EXPAND_BUDGET) break;
+        }
+        Journal next = journal(dimension, entries); validate(next);
+        if (!added.isEmpty()) { access.commit(next); access.open(List.copyOf(added)); }
+        return new ExpansionResult(next, limited);
+    }
+
+    private static Journal journal(String dimension, List<Entry> entries) { return entries.isEmpty() ? EMPTY : new Journal(dimension, entries); }
+
+    private static void advance(ServerLevel level, ServerPlayer player) throws IOException {
+        if (session.owned.size() >= MAX_BLOCKS) { notifyLimit(player); return; }
+        BlockPos feet = player.blockPosition(); Direction direction = player.getDirection();
+        if (!feet.equals(session.origin) || direction != session.direction) {
+            session.origin = feet.immutable(); session.direction = direction; session.columns = columns(feet, direction);
+            session.columnCursor = 0; session.scanTop = Integer.MIN_VALUE; session.nextScanTick = owner.getTickCount();
+        } else if (session.columnCursor >= session.columns.size()) {
+            if (owner.getTickCount() - session.nextScanTick < 0) return;
+            session.columnCursor = 0; session.scanTop = Integer.MIN_VALUE;
+        }
+        List<BlockPos> candidates = new ArrayList<>(); int scanned = 0;
+        while (session.columnCursor < session.columns.size() && scanned < SCAN_BUDGET && candidates.size() < EXPAND_BUDGET) {
+            BlockPos column = session.columns.get(session.columnCursor);
+            if (session.scanTop == Integer.MIN_VALUE) {
+                if (session.chunks.size() >= MAX_CHUNKS && !session.chunks.contains(new ChunkPos(column.getX() >> 4, column.getZ() >> 4))) {
+                    notifyLimit(player); session.columnCursor++; continue;
+                }
+                if (!safeColumn(level, column)) {
+                    session.columnCursor++;
+                    if (!session.boundaryNotified) { session.boundaryNotified = true; player.sendSystemMessage(net.minecraft.network.chat.Component.literal("分海前方尚未載入或無安全支撐；既有水道會保留至到期。")); }
+                    continue;
+                }
+                // loaded 驗證成功後才讀 heightmap；不向新區塊要求生成。
+                session.scanTop = Math.min(level.getMaxY() - 1, level.getHeight(Heightmap.Types.WORLD_SURFACE, column.getX(), column.getZ()) - 1);
+                session.scanY = column.getY();
+            }
+            if (!loaded(level, column)) { session.columnCursor++; session.scanTop = Integer.MIN_VALUE; continue; }
+            while (session.scanY <= session.scanTop && scanned < SCAN_BUDGET && candidates.size() < EXPAND_BUDGET) {
+                BlockPos pos = new BlockPos(column.getX(), session.scanY++, column.getZ()); scanned++;
+                if (level.isInWorldBounds(pos) && !session.owned.containsKey(pos) && level.getBlockState(pos).is(Blocks.WATER)) candidates.add(pos);
+            }
+            if (session.scanY > session.scanTop) { session.columnCursor++; session.scanTop = Integer.MIN_VALUE; }
+        }
+        if (session.columnCursor >= session.columns.size()) session.nextScanTick = owner.getTickCount() + 20;
+        if (candidates.isEmpty()) return;
+        ExpansionResult result = expand(session.journal, session.dimension, candidates, new ExpansionAccess() {
+            @Override public void commit(Journal journal) throws IOException { writeJournal(journalFile, journal); session.install(journal); }
+            @Override public Entry capture(BlockPos pos) {
+                if (!loaded(level, pos)) return null;
+                BlockState state = level.getBlockState(pos);
+                if (!state.is(Blocks.WATER) || TemporaryObstruction.claims(level, pos) || TemporalRegression.claims(level, pos)
+                        || !WorldChangePolicy.allow(player, pos) || TemporaryObstruction.claims(level, pos) || TemporalRegression.claims(level, pos)
+                        || level.getBlockState(pos) != state) return null;
+                return new Entry(pos.getX(), pos.getY(), pos.getZ(), state.getValue(LiquidBlock.LEVEL), true);
+            }
+            @Override public void open(List<Entry> entries) throws IOException {
+                for (Entry entry : entries) {
+                    BlockState state = level.getBlockState(entry.pos());
+                    if (!originalWater(state, entry) || !WorldChangePolicy.allow(player, entry.pos()) || level.getBlockState(entry.pos()) != state
+                            || !level.setBlock(entry.pos(), Blocks.AIR.defaultBlockState(), UPDATE_FLAGS) || !level.getBlockState(entry.pos()).is(Blocks.AIR))
+                        throw new IOException("其他來源拒絕新水域移水；保留WAL以復原");
+                }
+            }
+        });
+        if (result.limited()) notifyLimit(player);
+    }
+
+    private static void notifyLimit(ServerPlayer player) {
+        if (!session.limitNotified) { session.limitNotified = true; player.sendSystemMessage(net.minecraft.network.chat.Component.literal("分海範圍已達上限，既有水道會保留至到期。")); }
+    }
+
+    private static boolean originalWater(BlockState state, Entry entry) {
+        return state.is(Blocks.WATER) && state.getValue(LiquidBlock.LEVEL) == entry.waterLevel();
+    }
+
+    private static void restoreEntries(ServerLevel level, List<Entry> entries) throws IOException {
+        Map<Entry, BlockState> finalStates = new LinkedHashMap<>();
+        ServerPlayer player = session.playerId == null ? null : owner.getPlayerList().getPlayer(session.playerId);
+        for (Entry entry : entries) {
+            if (!entry.wantedAir()) continue;
+            if (!level.isInWorldBounds(entry.pos()) || !loaded(level, entry.pos())) throw new IOException("復原區塊尚未載入／越界");
+            BlockState state = level.getBlockState(entry.pos());
+            if (state.is(Blocks.AIR)) {
+                // 有原玩家時先問原版／Fabric 保護；crash 載入沒有玩家，不偽造身份。
+                if (player != null && !WorldChangePolicy.permission(level, player, entry.pos()))
+                    throw new IOException("其他來源拒絕復原自有空氣；保留 journal");
+                BlockState original = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, entry.waterLevel());
+                if (level.getBlockState(entry.pos()) != state
+                        || !level.setBlock(entry.pos(), original, UPDATE_FLAGS)
+                        || level.getBlockState(entry.pos()) != original) throw new IOException("原始水方塊復原失敗");
+                state = original;
+            }
+            // 玩家新增方塊、不同 LEVEL 的新水皆原樣保存，不以舊快照覆寫。
+            finalStates.put(entry, state);
+        }
+        if (!finalStates.isEmpty()) flushAndVerify(level, finalStates);
+    }
+
+    interface RecoveryAccess {
+        boolean ready(Entry entry);
+        void restoreAndSave(List<Entry> batch) throws IOException;
+        void commit(Journal remaining) throws IOException;
+    }
+    record RecoveryResult(Journal journal, int cursor, int completed) {}
+
+    /** 分批交易也與 crash fixture 共用；方塊保存成功後才能縮減 journal。 */
+    static RecoveryResult recover(Journal before, int cursor, RecoveryAccess access) throws IOException {
+        validate(before);
+        if (before.entries().isEmpty()) { access.commit(EMPTY); return new RecoveryResult(EMPTY, 0, 0); }
+        List<Entry> entries = before.entries(), batch = new ArrayList<>();
+        cursor = Math.floorMod(cursor, entries.size());
+        for (int n = 0; n < Math.min(SCAN_BUDGET, entries.size()) && batch.size() < RESTORE_BUDGET; n++) {
+            Entry entry = entries.get(cursor++ % entries.size());
+            if (access.ready(entry)) batch.add(entry);
+        }
+        if (batch.isEmpty()) return new RecoveryResult(before, Math.floorMod(cursor, entries.size()), 0);
+        access.restoreAndSave(List.copyOf(batch));
+        Set<BlockPos> restored = new HashSet<>(); batch.forEach(e -> restored.add(e.pos()));
+        Journal remaining = journal(before.dimension(), entries.stream().filter(e -> !restored.contains(e.pos())).toList());
+        access.commit(remaining);
+        return new RecoveryResult(remaining, remaining.entries().isEmpty() ? 0 : Math.floorMod(cursor, remaining.entries().size()), batch.size());
+    }
+
+    /** 每次至多 512 格；僅已載入區塊，保護拒絕／離線區塊留 WAL 待自然載入。 */
     public static void restoreAll(MinecraftServer server) {
         if (server != owner || journalFile == null || session == null) return;
-        session.restoring = true;
-        session.retryTick = server.getTickCount() + 100;
+        if (!recoveryDue(session.restoring, server.getTickCount(), session.retryTick)) return;
+        session.restoring = true; session.retryTick = server.getTickCount() + 1;
         try {
-            ServerLevel level = findLevel(server, session.journal.dimension());
-            if (level == null) throw new IllegalStateException("分海紀錄所屬維度不可用");
-            Set<ChunkPos> chunks = new HashSet<>();
-            for (Entry entry : session.journal.entries()) {
-                if (!entry.wantedAir()) continue;
-                if (!level.isInWorldBounds(entry.pos())) throw new IllegalStateException("復原座標超出目前世界高度／邊界");
-                chunks.add(entry.chunk());
-            }
-            // 驗證過的 3×12 區域最多四個 chunk；沒有擴散搜尋，也不生成遺失的區塊。
-            for (ChunkPos chunk : chunks) {
-                if (level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) == null) {
-                    var saved = level.getChunkSource().chunkMap.read(chunk).join();
-                    if (saved.isEmpty() || !SerializableChunkData.getChunkStatusFromTag(saved.get())
-                            .isOrAfter(net.minecraft.world.level.chunk.status.ChunkStatus.FULL)) {
-                        throw new IllegalStateException("分海原區塊尚無完整存檔，不生成新區塊進行復原");
-                    }
-                    level.getChunk(chunk.x(), chunk.z());
+            ServerLevel level = findLevel(server, session.dimension);
+            if (level == null) { session.retryTick += 99; return; }
+            ServerPlayer player = session.playerId == null ? null : owner.getPlayerList().getPlayer(session.playerId);
+            RecoveryResult result = recover(session.journal, session.restoreCursor, new RecoveryAccess() {
+                @Override public boolean ready(Entry entry) {
+                    if (!entry.wantedAir()) return true;
+                    if (!level.isInWorldBounds(entry.pos()) || !loaded(level, entry.pos())) return false;
+                    return !level.getBlockState(entry.pos()).is(Blocks.AIR) || player == null || WorldChangePolicy.permission(level, player, entry.pos());
                 }
-            }
-            Map<Entry, BlockState> finalStates = new LinkedHashMap<>();
-            for (Entry entry : session.journal.entries()) {
-                if (!entry.wantedAir()) continue;
-                BlockState state = level.getBlockState(entry.pos());
-                if (state.is(Blocks.AIR) || state.is(Blocks.WATER)) {
-                    BlockState original = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, entry.waterLevel());
-                    if (state != original && !level.setBlock(entry.pos(), original, UPDATE_FLAGS)) {
-                        throw new IllegalStateException("原始水方塊復原失敗：" + entry.pos());
-                    }
-                    state = level.getBlockState(entry.pos());
-                    if (state != original) throw new IllegalStateException("其他模組拒絕水方塊復原");
-                }
-                // 非 WATER/AIR 方塊原樣保存；不刪除玩家建造、植物或其他模組方塊。
-                finalStates.put(entry, state);
-            }
-            if (!finalStates.isEmpty()) flushAndVerify(level, finalStates);
-            writeJournal(journalFile, EMPTY);
-            session = null;
-            available = true;
+                @Override public void restoreAndSave(List<Entry> batch) throws IOException { restoreEntries(level, batch); }
+                @Override public void commit(Journal remaining) throws IOException { writeJournal(journalFile, remaining); session.install(remaining); }
+            });
+            if (result.journal().entries().isEmpty()) { session = null; available = true; }
+            else { session.restoreCursor = result.cursor(); if (result.completed() == 0) session.retryTick += 19; }
         } catch (IOException | RuntimeException error) {
-            available = false;
-            LOGGER.error("分海尚未完成復原／保存；保留 journal，拒絕新分海，稍後重試：{}", journalFile, error);
+            available = false; session.retryTick = server.getTickCount() + 100;
+            LOGGER.error("分海尚未完成復原／保存；保留 journal，稍後重試：{}", journalFile, error);
         }
     }
 
@@ -321,6 +487,7 @@ public final class TemporaryWaterCorridor {
         JsonElement document = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8));
         if (!document.isJsonObject()) throw invalid("根必須為物件");
         JsonObject root = document.getAsJsonObject();
+        if (!root.keySet().equals(Set.of("schemaVersion", "dimension", "entries"))) throw invalid("根欄位缺漏或包含未知資料");
         if (integer(root, "schemaVersion") != SCHEMA_VERSION) throw invalid("未知 schemaVersion");
         if (!root.has("dimension") || !root.get("dimension").isJsonPrimitive()
                 || !root.getAsJsonPrimitive("dimension").isString()) throw invalid("dimension 必須是字串");
@@ -329,6 +496,7 @@ public final class TemporaryWaterCorridor {
         for (JsonElement item : root.getAsJsonArray("entries")) {
             if (!item.isJsonObject()) throw invalid("每筆方塊紀錄必須是物件");
             JsonObject entry = item.getAsJsonObject();
+            if (!entry.keySet().equals(Set.of("x", "y", "z", "waterLevel", "wantedAir"))) throw invalid("方塊欄位缺漏或包含未知資料");
             if (!entry.has("wantedAir") || !entry.get("wantedAir").isJsonPrimitive()
                     || !entry.getAsJsonPrimitive("wantedAir").isBoolean()) throw invalid("wantedAir 必須是布林值");
             entries.add(new Entry(integer(entry, "x"), integer(entry, "y"), integer(entry, "z"),
@@ -374,8 +542,6 @@ public final class TemporaryWaterCorridor {
         if (!journal.dimension().matches("[a-z0-9_.-]+:[a-z0-9/._-]+")) throw invalid("dimension 不是有效識別名稱");
         Set<String> positions = new HashSet<>();
         Set<Long> chunks = new HashSet<>();
-        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
         for (Entry entry : journal.entries()) {
             if (entry == null || entry.waterLevel() < 0 || entry.waterLevel() > 15
                     || entry.x() < -30000000 || entry.x() >= 30000000
@@ -383,13 +549,8 @@ public final class TemporaryWaterCorridor {
                     || entry.y() < -20000000 || entry.y() >= 20000000) throw invalid("座標或水 LEVEL 超出範圍");
             if (!positions.add(entry.x() + "," + entry.y() + "," + entry.z())) throw invalid("同一座標重複");
             chunks.add(((long)(entry.x() >> 4) << 32) | ((entry.z() >> 4) & 0xffffffffL));
-            minX = Math.min(minX, entry.x()); maxX = Math.max(maxX, entry.x());
-            minY = Math.min(minY, entry.y()); maxY = Math.max(maxY, entry.y());
-            minZ = Math.min(minZ, entry.z()); maxZ = Math.max(maxZ, entry.z());
         }
-        long xSpan = (long)maxX - minX + 1, ySpan = (long)maxY - minY + 1, zSpan = (long)maxZ - minZ + 1;
-        if (ySpan > HEIGHT || !((xSpan <= WIDTH && zSpan <= LENGTH) || (xSpan <= LENGTH && zSpan <= WIDTH))
-                || chunks.size() > MAX_CHUNKS) throw invalid("復原紀錄超出單一走廊的安全尺寸／區塊數");
+        if (chunks.size() > MAX_CHUNKS) throw invalid("復原紀錄超過安全區塊數");
     }
 
     private static int integer(JsonObject object, String field) {

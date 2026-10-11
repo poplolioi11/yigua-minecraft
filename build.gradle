@@ -48,8 +48,16 @@ test { enabled = false }
  'rareFortuneSelfTest': 'art.yigua.minecraft.RareFortuneSelfTest',
  'movingFortuneSelfTest': 'art.yigua.minecraft.MovingFortuneSelfTest',
  'specialFortuneSelfTest': 'art.yigua.minecraft.SpecialFortuneSelfTest',
+ 'specialEventPlanSelfTest': 'art.yigua.minecraft.SpecialEventPlanSelfTest',
  'skyOmenPayloadSelfTest': 'art.yigua.minecraft.SkyOmenPayloadSelfTest',
+ 'advancementLayoutSelfTest': 'art.yigua.minecraft.AdvancementLayoutSelfTest',
  'temporaryWaterCorridorSelfTest': 'art.yigua.minecraft.TemporaryWaterCorridorSelfTest',
+ 'temporaryObstructionSelfTest': 'art.yigua.minecraft.TemporaryObstructionSelfTest',
+ 'temporalInsightSelfTest': 'art.yigua.minecraft.TemporalInsightSelfTest',
+ 'phoenixFlightSelfTest': 'art.yigua.minecraft.PhoenixFlightSelfTest',
+ 'temporalRegressionSelfTest': 'art.yigua.minecraft.TemporalRegressionSelfTest',
+ 'insightPayloadSelfTest': 'art.yigua.minecraft.InsightPayloadSelfTest',
+ 'temporalInsightWorldRendererSelfTest': 'art.yigua.minecraft.client.TemporalInsightWorldRendererSelfTest',
  'manualCastingSelfTest': 'art.yigua.minecraft.ManualCastingSelfTest'].each { taskName, entry ->
     tasks.register(taskName, JavaExec) {
         dependsOn testClasses
@@ -63,3 +71,8 @@ tasks.register('verifyData', Exec) {
     commandLine 'python3', 'tools/verify_data.py'
 }
 check.dependsOn verifyData
+
+tasks.register('verifyAdvancements', Exec) {
+    commandLine 'python3', 'tools/generate_advancement_assets.py', '--check'
+}
+check.dependsOn verifyAdvancements

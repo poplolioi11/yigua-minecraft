@@ -14,12 +14,12 @@ public final class SpecialFortuneSelfTest {
             CastResult good = CastingEngine.fromLines(method, List.of(6, 6, 6, 9, 9, 9));
             CastResult bad = CastingEngine.fromLines(method, List.of(9, 9, 9, 6, 6, 6));
             CastResult nine = CastingEngine.fromLines(method, List.of(9, 9, 9, 9, 9, 9));
-            counts(good, 64, 0, 16, 0, 8, 0, 0, 0);
-            counts(bad, 0, 1, 0, 0, 0, 0, 0, 0);
-            counts(nine, 0, 0, 16, 16, 0, 0, 0, 0);
-            counts(allMoving(method, 53), 0, 0, 16, 0, 0, 8, 0, 0);
-            counts(allMoving(method, 13), 0, 0, 16, 0, 0, 0, 8, 0);
-            counts(allMoving(method, 59), 0, 0, 16, 0, 0, 0, 0, 1);
+            counts(good, 64, 0, 16, 0, 8, 0, 0, 0, 0);
+            counts(bad, 0, 1, 0, 0, 0, 0, 0, 0, 8);
+            counts(nine, 0, 0, 16, 16, 0, 0, 0, 0, 0);
+            counts(allMoving(method, 53), 0, 0, 16, 0, 0, 8, 0, 0, 0);
+            counts(allMoving(method, 13), 0, 0, 16, 0, 0, 0, 8, 0, 0);
+            counts(allMoving(method, 59), 0, 0, 16, 0, 0, 0, 0, 1, 0);
             // 公平三錢下，一個否→泰排列加獨立神光門檻：1 / 16,777,216。
             if (method == Method.COINS) {
                 RareFortune.Outcome fortune = RareFortune.resolve(good, CastingMaterial.COPPER);

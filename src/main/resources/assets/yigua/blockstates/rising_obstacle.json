@@ -1,0 +1,28 @@
+{
+  "variants": {
+    "rise=1": {
+      "model": "yigua:block/rising_obstacle_1"
+    },
+    "rise=2": {
+      "model": "yigua:block/rising_obstacle_2"
+    },
+    "rise=3": {
+      "model": "yigua:block/rising_obstacle_3"
+    },
+    "rise=4": {
+      "model": "yigua:block/rising_obstacle_4"
+    },
+    "rise=5": {
+      "model": "yigua:block/rising_obstacle_5"
+    },
+    "rise=6": {
+      "model": "yigua:block/rising_obstacle_6"
+    },
+    "rise=7": {
+      "model": "yigua:block/rising_obstacle_7"
+    },
+    "rise=8": {
+      "model": "yigua:block/rising_obstacle_8"
+    }
+  }
+}

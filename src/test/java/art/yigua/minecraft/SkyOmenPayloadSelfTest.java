@@ -23,7 +23,7 @@ public final class SkyOmenPayloadSelfTest {
                 }
             }
         }
-        for (String mode : new String[] {null, "", "PURPLE", "unknown", "purple ", "abcdefghijklmnopq"}) {
+        for (String mode : new String[] {null, "", "PURPLE", "DIVINE", "unknown", "purple ", "divine ", "abcdefghijklmnopq"}) {
             rejected(() -> new SkyOmenPayload(mode, 60, 0));
             if (mode != null) invalidWire(mode, 60);
         }
@@ -36,7 +36,9 @@ public final class SkyOmenPayloadSelfTest {
             truncated.writeUtf("sea"); truncated.writeVarInt(60); truncated.writeInt(1);
             rejected(() -> SkyOmenPayload.CODEC.decode(truncated));
         } finally { truncated.release(); }
-        require(SkyOmenPayload.TYPE.id().toString().equals("yigua:sky_omen"), "封包識別名稱不符");
+        require(SkyOmenPayload.TYPE.id().toString().equals("yigua:sky_omen_v2"), "封包識別名稱不符");
+        require(SkyOmenPayload.MODES.contains("divine"), "神光模式未加入封包白名單");
+        art.yigua.minecraft.client.SkyOmenWorldRendererSelfTest.verify();
         System.out.println("SkyOmenPayloadSelfTest：" + checks + " 項封包核對通過。");
     }
 

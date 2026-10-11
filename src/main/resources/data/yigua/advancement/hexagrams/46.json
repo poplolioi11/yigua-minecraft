@@ -28,5 +28,5 @@
     ]
   ],
   "sends_telemetry_event": false,
-  "parent": "yigua:hexagrams/45"
+  "parent": "yigua:hexagrams/root"
 }

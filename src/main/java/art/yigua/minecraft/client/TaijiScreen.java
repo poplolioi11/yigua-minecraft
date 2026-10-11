@@ -224,9 +224,10 @@ public final class TaijiScreen extends Screen {
         choices.add(new Choice("yigua taiji effect undying", "生生不息", "短暫的不死守護。", false));
         choices.add(new Choice("yigua taiji effect five_qi", "五氣朝元", "五色氣流匯聚的異象。", false));
         choices.add(new Choice("yigua taiji effect flowers", "三花聚頂", "三花聚頂的異象。", false));
-        choices.add(new Choice("yigua taiji effect birds", "萬鳥朝拜", "群鳥朝拜的異象。", false));
+        choices.add(new Choice("yigua taiji effect birds", "百鳥朝鳳", "鳳凰盤旋、振翅飛行兩分鐘；空白升高、潛行下降。", false));
         choices.add(new Choice("yigua taiji effect rapport", "萬物親和", "短暫的生物親和。", false));
-        choices.add(new Choice("yigua taiji effect sea", "分海", "短暫分開前方水道。", false));
+        choices.add(new Choice("yigua taiji effect sea", "分海", "有效期間隨行分開前方水道。", false));
+        choices.add(new Choice("yigua taiji effect obstruction", "山重阻路", "寬闊柱牆依生態逐層升起；留下永久方塊。", false));
         return List.copyOf(choices);
     }
 }

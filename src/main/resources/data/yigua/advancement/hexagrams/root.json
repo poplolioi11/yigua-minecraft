@@ -7,7 +7,7 @@
       "text": "一卦・六十四卦"
     },
     "description": {
-      "text": "透過正式起卦收集六十四卦；六爻圖示由初爻向上排列。"
+      "text": "依文王卦序由左到右、由上到下排列；拖曳查看後續卦象。未取得亦保留位置，正式起卦才解鎖。"
     },
     "frame": "task",
     "show_toast": false,
@@ -17,7 +17,7 @@
   },
   "criteria": {
     "obtained": {
-      "trigger": "minecraft:impossible"
+      "trigger": "minecraft:tick"
     }
   },
   "requirements": [

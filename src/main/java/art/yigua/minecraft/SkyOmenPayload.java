@@ -13,11 +13,11 @@ import net.minecraft.server.level.ServerPlayer;
 /** 當事玩家的短暫天空視覺；不包含天氣、世界或其他玩家的寫入指令。 */
 public record SkyOmenPayload(String mode, int durationTicks, long seed) implements CustomPacketPayload {
     public static final Set<String> MODES = Set.of(
-        "purple", "cloud", "dark", "five_qi", "flowers", "birds", "rapport", "sea");
+        "purple", "cloud", "dark", "divine", "five_qi", "flowers", "birds", "rapport", "sea");
     public static final int MAX_DURATION_TICKS = 1200;
     private static final int MAX_MODE_LENGTH = 16;
     public static final Type<SkyOmenPayload> TYPE =
-        new Type<>(Identifier.fromNamespaceAndPath("yigua", "sky_omen"));
+        new Type<>(Identifier.fromNamespaceAndPath("yigua", "sky_omen_v2"));
     public static final StreamCodec<RegistryFriendlyByteBuf, SkyOmenPayload> CODEC = StreamCodec.of(
         (buffer, payload) -> {
             buffer.writeUtf(payload.mode(), MAX_MODE_LENGTH);
@@ -34,7 +34,7 @@ public record SkyOmenPayload(String mode, int durationTicks, long seed) implemen
         }
     }
 
-    /** 僅註冊伺服器到玩家端的遊戲封包；共同初始化可安全重複呼叫。 */
+    /** v2 防止含 divine 的新模式送給只認得 v1 模式的舊 client；不支援時略過視覺。 */
     public static synchronized void init() {
         if (initialized) return;
         PayloadTypeRegistry.clientboundPlay().register(TYPE, CODEC);

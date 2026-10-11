@@ -9,31 +9,39 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.phys.Vec3;
 
-/** 上方三分之一內的透明像素異象；不替換天空渲染器、不改世界天氣。 */
+/** 玩家端短暫異象；神光／烏雲另提交世界幾何，不替換天空渲染器或改世界天氣。 */
 public final class SkyOmenClient {
     private static final int[] FIVE_COLORS = {0x86D9C5, 0xF49A88, 0xEBD681, 0xD9EBF4, 0x98ACDF};
     private static boolean initialized;
     private static SkyOmenPayload current;
     private static ClientLevel currentLevel;
+    private static LocalPlayer currentPlayer;
     private static int elapsedTicks;
+    private static int visualTicks;
+    private static Vec3 worldAnchor = Vec3.ZERO;
+    private static float worldAngle;
 
     private SkyOmenClient() {}
 
     public static synchronized void init() {
         if (initialized) return;
         SkyOmenPayload.init();
+        SkyOmenWorldRenderer.init();
         ClientPlayNetworking.registerGlobalReceiver(SkyOmenPayload.TYPE,
             (payload, context) -> context.client().execute(() -> receive(context.client(), payload)));
         ClientPlayConnectionEvents.DISCONNECT.register((connection, minecraft) -> clear());
         ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
             if (current == null) return;
             if (minecraft.player == null || minecraft.level == null || minecraft.level != currentLevel
-                    || !minecraft.player.isAlive()) {
+                    || minecraft.player != currentPlayer || (!minecraft.player.isAlive() && !"dark".equals(current.mode()))) {
                 clear();
-            } else if (!minecraft.isPaused() && ++elapsedTicks >= current.durationTicks()) {
-                clear();
+            } else if (!minecraft.isPaused()) {
+                visualTicks++;
+                if (++elapsedTicks >= current.durationTicks()) clear();
             }
         });
         HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
@@ -45,15 +53,41 @@ public final class SkyOmenClient {
     private static void receive(Minecraft minecraft, SkyOmenPayload payload) {
         if (minecraft.level == null || minecraft.player == null || !minecraft.player.isAlive()) return;
         // 同時僅保留一個異象；新秘效替換一般紫氣／雲霧，不累積繪圖工作。
+        boolean continuation = current != null && currentLevel == minecraft.level && currentPlayer == minecraft.player
+            && current.mode().equals(payload.mode()) && current.seed() == payload.seed();
         current = payload;
         currentLevel = minecraft.level;
+        currentPlayer = minecraft.player;
         elapsedTicks = 0;
+        if (!continuation) visualTicks = 0;
+        // 固定在收到異象時的實際世界位置與方位，轉頭後不會仍黏在畫面中央。
+        worldAnchor = minecraft.player.position();
+        Vec3 look = minecraft.player.getLookAngle();
+        worldAngle = (float)Math.toDegrees(Math.atan2(look.x, look.z));
     }
 
     private static void clear() {
         current = null;
         currentLevel = null;
+        currentPlayer = null;
         elapsedTicks = 0;
+        visualTicks = 0;
+        worldAnchor = Vec3.ZERO;
+        worldAngle = 0;
+    }
+
+    static SkyOmenWorldRenderer.Frame extractWorldFrame(float partialTick) {
+        SkyOmenPayload omen = current;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (omen == null || minecraft.level != currentLevel || minecraft.player == null
+                || minecraft.player != currentPlayer || (!minecraft.player.isAlive() && !"dark".equals(omen.mode()))) {
+            return SkyOmenWorldRenderer.Frame.EMPTY;
+        }
+        if (!"dark".equals(omen.mode()) && !"divine".equals(omen.mode())) {
+            return SkyOmenWorldRenderer.Frame.EMPTY;
+        }
+        double time = Math.clamp(elapsedTicks + partialTick, 0, omen.durationTicks());
+        return SkyOmenWorldRenderer.frame(omen.mode(), omen.seed(), time, omen.durationTicks(), worldAnchor, worldAngle);
     }
 
     private static void draw(GuiGraphicsExtractor graphics, float partialTick) {
@@ -64,9 +98,10 @@ public final class SkyOmenClient {
         int width = graphics.guiWidth();
         int sky = Math.min(100, graphics.guiHeight() / 3);
         if (width < 1 || sky < 1) return;
-        double time = Math.clamp(elapsedTicks + partialTick, 0, omen.durationTicks());
+        double time = visualTicks + partialTick;
+        double remaining = Math.max(0, omen.durationTicks() - elapsedTicks - partialTick);
         double fade = Math.min(1, time / Math.min(10.0, omen.durationTicks() / 3.0))
-            * Math.min(1, (omen.durationTicks() - time) / Math.min(20.0, omen.durationTicks() / 3.0));
+            * Math.min(1, remaining / Math.min(20.0, omen.durationTicks() / 3.0));
         Painter painter = new Painter(graphics, width, sky, fade);
         switch (omen.mode()) {
             case "purple" -> {
@@ -74,7 +109,12 @@ public final class SkyOmenClient {
                 clouds(painter, omen.seed(), time, 0xBAA2E5, 7, 30);
             }
             case "cloud" -> clouds(painter, omen.seed(), time, 0xD6DCE5, 9, 42);
-            case "dark" -> clouds(painter, omen.seed(), time, 0x343A4F, 11, 60);
+            case "dark" -> {
+                // 陰天色調覆蓋整個場景；真正的雲冠由世界 renderer 負責。
+                int alpha = (int)Math.clamp(Math.round(42 * fade), 0, 42);
+                if (alpha > 0) graphics.fill(0, 0, width, graphics.guiHeight(), (alpha << 24) | 0x182030);
+            }
+            case "divine" -> { /* 左右散雲與緩降神光使用 world-space 幾何。 */ }
             case "five_qi" -> fiveQi(painter, time);
             case "flowers" -> flowers(painter, time);
             case "birds" -> birds(painter, omen.seed(), time);

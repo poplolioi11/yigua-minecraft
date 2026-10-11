@@ -95,9 +95,12 @@ public final class BookSelfTest {
             check(flatText(chosen).contains("並非隨機起卦") && flatText(chosen).contains(Library.profileName(profile)),
                 "指定效果明示來源與實際效果");
         }
-        for (String profile : List.of("divine", "thunder", "undying", "five_qi", "flowers", "birds", "rapport", "sea")) {
+        for (String profile : List.of("divine", "thunder", "undying", "five_qi", "flowers", "birds", "rapport", "sea", "obstruction")) {
             inspect(BookBuilder.controlledEffect(profile, 0), false);
         }
+        check(flatText(BookBuilder.controlledEffect("birds", 2400)).contains("空白升高")
+            && flatText(BookBuilder.controlledEffect("obstruction", 1200)).contains("永久留下"),
+            "指定秘效結果須說明實際操作與永久地形行為");
 
         WrittenBookContent catalog = BookBuilder.catalog();
         Set<String> catalogCommands = inspect(catalog, false);

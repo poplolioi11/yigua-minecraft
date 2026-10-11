@@ -46,6 +46,8 @@ public final class YiguaClient implements ClientModInitializer {
 
     @Override public void onInitializeClient() {
         SkyOmenClient.init();
+        TemporalInsightClient.init();
+        PhoenixFlightClient.init();
         TaijiClient.init();
         loadMode();
         CastingProgressPayload.init();

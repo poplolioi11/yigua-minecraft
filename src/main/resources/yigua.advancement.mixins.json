@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "art.yigua.minecraft.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": ["HexagramAdvancementLayoutMixin", "WaterCorridorFlowMixin"],
+  "client": ["HexagramAdvancementWidgetMixin", "HexagramAdvancementTabMixin"],
+  "injectors": {"defaultRequire": 1}
+}

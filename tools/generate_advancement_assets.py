@@ -12,10 +12,12 @@ pointing at assets/yigua/items/hexagram_XX.json. It does not register a new item
 Minecraft 26.3 DisplayInfo uses ItemStackTemplate and DataComponents.ITEM_MODEL
 stores Identifier.CODEC, so the model component is a namespaced string.
 
-Every criterion is minecraft:impossible, named "obtained". The server grants
-the appropriate criterion only for formal gameplay; ancestry lays out the tab
-and does not impose a sequential collection requirement. The hexagram tab uses
-eight branches of eight visible nodes, avoiding a single 64-node horizontal row.
+Each collectible criterion is minecraft:impossible, named "obtained". The server
+grants it only for formal gameplay; all 64 hexagrams are direct children of one
+root, so completion never requires a previous hexagram. The root's tick criterion
+opens the tab without granting a collectible. Native visibility then includes all
+64 uncollected slots; the narrowly scoped layout mixin places them in an 8x8 grid
+in King Wen order, independent of Minecraft's unordered child set.
 Secret challenge nodes have hidden=true and no rewards or extra client packets.
 """
 
@@ -65,9 +67,10 @@ EXTRA_EFFECTS = {
     "secret_undying": ("生生不息", "totem_of_undying", True, "正式起卦取得短暫的不死守護。"),
     "secret_five_qi": ("五氣朝元", "prismarine_crystals", True, "正式起卦遇見五色氣流匯聚的罕見異象。"),
     "secret_flowers": ("三花聚頂", "flowering_azalea", True, "正式起卦遇見三花聚頂的罕見異象。"),
-    "secret_birds": ("萬鳥朝拜", "parrot_spawn_egg", True, "正式起卦遇見群鳥朝拜的罕見異象。"),
+    "secret_birds": ("百鳥朝鳳", "parrot_spawn_egg", True, "正式起卦遇見鳳凰飛舞、雙翼振動的罕見異象。"),
     "secret_rapport": ("萬物親和", "wheat", True, "正式起卦取得短暫的萬物親和。"),
     "secret_sea": ("分海", "heart_of_the_sea", True, "正式起卦取得短暫的分海之力。"),
+    "secret_obstruction": ("山重阻路", "stone_bricks", True, "正式起卦遇見前路受阻的罕見異象。"),
 }
 
 
@@ -151,13 +154,15 @@ def make_outputs(root):
         outputs[assets / f"items/{key}.json"] = encode_json({
             "model": {"type": "minecraft:model", "model": f"yigua:item/{key}"},
         })
-        parent = "yigua:hexagrams/root" if (number - 1) % 8 == 0 else f"yigua:hexagrams/{number - 1:02}"
+        parent = "yigua:hexagrams/root"
         outputs[data / f"hexagrams/{number:02}.json"] = encode_json(advancement(
             f"第 {number} 卦・{name}", f"正式起卦取得本卦「{name}」，收入個人卦象圖鑑。",
             {"id": "minecraft:paper", "components": {"minecraft:item_model": f"yigua:{key}"}}, parent))
-    outputs[data / "hexagrams/root.json"] = encode_json(advancement(
-        "一卦・六十四卦", "透過正式起卦收集六十四卦；六爻圖示由初爻向上排列。",
-        {"id": "minecraft:book"}, root=True))
+    hexagram_root = advancement(
+        "一卦・六十四卦", "依文王卦序由左到右、由上到下排列；拖曳查看後續卦象。未取得亦保留位置，正式起卦才解鎖。",
+        {"id": "minecraft:book"}, root=True)
+    hexagram_root["criteria"]["obtained"]["trigger"] = "minecraft:tick"
+    outputs[data / "hexagrams/root.json"] = encode_json(hexagram_root)
     outputs[data / "effects/root.json"] = encode_json(advancement(
         "一卦・遊戲效果", "記錄正式起卦遇過的效果。各項效果是易經題材的遊戲改編。",
         {"id": "minecraft:amethyst_shard"}, root=True))

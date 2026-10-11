@@ -1,8 +1,52 @@
-# Yigua 0.2.0 Beta / 一卦 0.2.0 測試版
+# 一卦 Minecraft 發布紀錄
 
-Submission draft for the first public release. Version 0.1.0 was an internal development build. Publication and platform approval have not yet been confirmed.
+## 0.2.1 公開測試版
 
-## English
+### English
+
+Release notes for the **0.2.1 public beta**. Download availability and each platform’s publication/review status are determined by the [official release page](https://github.com/poplolioi11/yigua-minecraft/releases) and platform listings. The [0.2.0 release](https://github.com/poplolioi11/yigua-minecraft/releases/tag/v0.2.0) remains a historical baseline.
+
+- Show all **64 hexagrams** in an **8 × 8 King Wen order advancement grid**, from Qian to Wei Ji. Uncollected slots keep their individual six-line icons; any hexagram can unlock out of order. There are **107 advancement nodes** and **41 effect/event choices**: 32 ordinary effects and 9 hidden rare events.
+- Extend positive rare auras to **two minutes** with looping colored currents and flower light. Five Qi grants eligible missing Regeneration, Resistance, Speed, Haste and Strength; Three Flowers grants Night Vision, Luck and Slow Falling, all at level I. Existing states and server protection rules take priority.
+- Add translucent **non-player mob time echoes**: Five Qi shows recorded positions over the past three seconds; Three Flowers estimates the next three seconds from current motion and AI navigation. Predictions update when actions change. Each view is limited to 24 nearby mobs and six samples per mob. Prediction stops before body collision or eye-ray queries enter unloaded chunks, without loading or generating terrain.
+- Five Qi world interactions now support bounded oak, birch, spruce, cherry, acacia, dark oak, mangrove, jungle and pale oak trees, including branches and eligible four-trunk forms. Natural non-persistent leaves provide evidence, not a perfect provenance guarantee; uncertain, oversized, merged-root or waterlogged structures are rejected or skipped, with short feedback. Crops and berry bushes can return to seedlings, fruiting stems to young stems, glow-berry vines to an unfruiting state, and several soils to dirt. Six non-mechanical copper shapes can step back one oxidation stage while keeping wax and shape. Restore only owned unchanged temporary states; preserve foreign growth, waxing and replacement without healing, inventory rewinds or extra loot.
+- Widen the water corridor to **nine blocks**, covering the player and eleven blocks ahead, opening each column from player depth to its water surface. Retain previously opened sections during movement until the original two-minute deadline, then restore in batches. Dry-land activation can wait for entry into water without resetting the clock. Unloaded/unsafe columns and the **32,768-block / 32-chunk** limit stop new expansion while preserving opened sections. Natural-flow interception remains limited to owned air; direct bucket placement and foreign fluids stay outside that scope. Any replacement block or water, including the original water LEVEL, relinquishes ownership and is preserved. Water restoration and regression reserve mutually exclusive positions with pending obstacle construction; permanent completed obstacles use normal chunk storage.
+- Retain world-space clouds, a 120-tick divine scene with a beam descending from 32 blocks over 100 ticks, and **six client lightning flashes followed by one damage attempt**. These local sky visuals do not change server weather. Ordinary ten-minute and changed-hexagram five-plus-five-minute phases are unchanged.
+
+The guidebook still keeps secret triggers and probabilities hidden. Dedicated servers default world changes to off unless explicitly enabled; this is not universal land-claim integration. See [compatibility limits](COMPATIBILITY.md).
+
+- Rising obstacles now leave **permanent vanilla terrain**. Each land wave can cover seven blocks wide, three deep and three high (up to 63 blocks). Underwater columns grow from the seabed, searching at most 128 blocks down and adding a layer every two ticks. Water and replaceable, collision-free vegetation can be replaced; solid buildings, block entities, protection vetoes and reserved positions take priority. Materials follow the biome: sand in deserts/oceans/beaches, snow blocks in cold areas, packed mud in swamps, mossy cobblestone in forests, basalt in the Nether, end stone in the End and stone elsewhere. The one-minute event deadline or Taiji clear stops new placement; completed blocks remain and can be mined normally.
+- Rename the bird event **Hundred Birds Pay Homage to the Phoenix**. A flying phoenix and animated pixel wings accompany two-minute movement: hold Jump to ascend, Sneak to descend, and release to glide down. The effect does not grant Creative flight or change player abilities. Existing flight, elytra gliding and levitation take priority; protected gravity/fall settings can disable it.
+
+**Validation:** The latest full build and self-tests passed in 10 seconds across 28 tasks (26 executed, 2 up-to-date). Checks include 31,393 obstruction, 8,543 regression, 24,290 corridor and 9,650 flight-rule checks; the flight entry also runs 269,609 geometry checks, counted once. Native IntegratedServer testing on 2026-10-12 at 06:02 Taiwan time passed all 12 cases / 537,671 assertions with 13 external mods loaded. This includes permanent land/ocean obstacles, six genuinely generated tree species, the listed crop/copper/surface interactions, and real client/server phoenix ascent, descent, glide, expiry and simulated foreign-flight priority. Original world/player state and input keys were restored. The connection was local in-memory, not a new real-TCP or dedicated-server test. The earlier **10-case / 20,900-assertion IntegratedServer result belongs to the snapshot before those changes**, with original state restored; it is not final validation of the latest code. A separate moving-cow fixture at 00:09 confirmed six separated translucent echoes in both FUTURE and PAST native GPU screenshots; particles partly occlude them. Original world/player state was restored. The first-person phoenix frame visibly includes pixel wings and birds; third-person appearance and full animation aesthetics were not exhaustively assessed. Local memory connections do not replace dedicated-server or real-TCP testing. The 0.2.0 **29-case / 1,576-assertion real-TCP regression** remains a separate historical baseline. See [VALIDATION.md](VALIDATION.md).
+
+Requires Minecraft Java 26.3, Java 25, Fabric Loader 0.19.5 and Fabric API 0.162.0+26.3 on clients and server. By **poplolioi11 / Yigua yigua.art**; AI production and separate MIT / CC BY 4.0 scopes remain in [PROVENANCE.md](../PROVENANCE.md). Download, listing and approval status for Modrinth and Nexus Mods should be checked on their official pages; prepared drafts and uploaded files do not imply approval. CurseForge submissions are paused at the author’s request, with no further sign-in attempts.
+
+### 繁體中文
+
+此為 **0.2.1 公開測試版**變更紀錄；下載及各平台上架／審核狀態以 [官方下載頁](https://github.com/poplolioi11/yigua-minecraft/releases) 與各平台頁面為準。[0.2.0](https://github.com/poplolioi11/yigua-minecraft/releases/tag/v0.2.0) 保留為歷史版本。
+
+- 原版「進度」完整顯示 **64 卦八乘八網格**，依文王卦序乾至未濟；未取得也保留六爻圖示，亂序卜到即可解鎖。共 **107個節點、41項效果／事件**：32種一般效果與9種隱藏稀有事件。
+- 正向稀有狀態延長為 **兩分鐘**，五色氣流與頭頂光花持續循環。五氣可補恢復、抗性、速度、挖掘加速及力量；三花可補夜視、幸運與緩降，皆第一級，既有同名與受保護項目略過。
+- 增加非玩家生物半透明時間虛影：五氣看過去三秒真實位置；三花依當下速度／AI路徑推估未來三秒，會隨行動變更更新。最多顯示32格內24個生物、各6筆樣本；身體或眼位射線涉及未載入區塊便停止，不載入新地形。
+- 五氣可回溯九種有界原版樹：橡木、樺木、杉木、櫻花、相思木、黑橡木、紅樹林、叢林木與蒼白橡木；支援天然枝幹與適用的四幹結構。非 persistent 冠葉作為辨識依據，仍無法百分之百區別自然與人工來源；無自然樹冠的木柱、合併多根、過大結構、水浸根與含資料方塊會拒絕或略過。成功或拒絕時會顯示短提示。成熟作物與莓果叢可回到幼苗、已結果瓜藤可回到幼藤、發光漿果藤可回到未結果狀態；草地、菌絲土、灰壤、泥土路、耕地、扎根泥土與粗泥可回到泥土。六種非機關銅材可倒退一個氧化階段，保留蠟層、方向及台階形狀；不處理容器、銅門或銅燈等機關。到期只復原仍屬自身的年齡及方塊，保留外部生長、上蠟及換材，不補血、不回復背包、不增加掉落物。
+- 分海改為**九格寬**、含腳下至前方共十二格，各列從玩家深度開至水面；移動累積並保留後方水道，原兩分鐘期限到達時分批復原，乾地等待入水不重設期限。未載入／不安全列及**32,768格／32區塊**上限只停止新擴張並告知，保留已有水道。自然水流攔截限自有空氣，不攔桶水直接放置或第三方流體；重新放入的方塊／水包含相同LEVEL都撤權並保留。分海、回溯與障路待放置位置互斥；障路落成後按原版永久方塊保存。
+- 保留世界空間雲影、神光120刻演出及32格光束100刻下降；**六道雷光後只有一次原版傷害判定**，不改伺服器天氣。一般十分鐘與變卦前後五分鐘沒有改動。
+
+遊戲書仍不預告秘效觸發條件與機率。獨立伺服器預設停用世界變更，需明確開啟；不是通用領地權限保障，詳見 [相容性界線](COMPATIBILITY.md)。
+
+- 障路生成期約一分鐘，每跨到新格或轉向便在前方升起，原地每 60 刻再起一輪。陸地每輪最多 7 格寬、3 格深、3 格高，共 63 格；水中沿 7×3 列從最深 128 格內的海床開始，每兩刻上升一層，直到玩家頭頂。可取代原版水、落葉、花草、藤蔓及其他無碰撞且可替換的植物方塊；不覆寫完整實體建築、方塊實體或既有回溯／分海持有位置。生成物按生態選材：沙漠、海洋、海灘用沙；寒冷地用雪塊；沼澤用泥坯；森林用青苔石；地獄用玄武岩；終界用終界石；其他地區用石頭。**落成的方塊永久保留，可正常挖掘與掉落；到期或太極解除只停止後續生成，不清除已建障壁。**
+- 「萬鳥朝拜」改名為「百鳥朝鳳」：兩分鐘鳳凰飛舞與像素振翅，按空白鍵上升、蹲下鍵下降，放開後緩降。飛行只採臨時移動與緩降，不開啟玩家的創造飛行權限；已具有飛行、鞘翅滑翔、漂浮等狀態時讓原有能力優先，重力或摔落傷害受保護時不啟用。
+
+**驗收狀態：**最新完整建置與自測通過：10 秒、28 項工作（26 項執行、2 項沿用）。最新原生單人測試於 2026-10-12 06:02（臺灣時間）完成 12 個案例／537,671 項斷言，涵蓋永久障路、六種真正生成樹／方塊前態，以及鳳翼升降、緩降、外來能力優先與到期；原世界、玩家狀態與測試按鍵已復原。這是載入 13 個外部模組的 IntegratedServer 本機記憶體連線，不能代替最新真正 TCP 或獨立伺服器驗收。較早 10 案例／20,900 項斷言保留為上述修改前基線。正式自測包括障路 31,393、回溯 8,543、分海 24,290、飛行規則 9,650 項；飛行入口另執行 269,609 項幾何檢查，只計一次。獨立移動牛 fixture 已確認六筆分離虛影與 FUTURE／PAST 原生 GPU 畫面，粒子會部分遮擋，本機記憶體連線也不是真正 TCP 或獨立伺服器驗收。0.2.0 的 29 案例／1,576 斷言真正 TCP 基線與先前失敗紀錄保留，詳見 [驗收紀錄](VALIDATION.md)。
+
+環境維持 Minecraft Java 26.3、Java 25、Fabric Loader 0.19.5、Fabric API 0.162.0+26.3；主機及玩家端須相同模組版本。作者為 **poplolioi11 / 一卦 yigua.art**；AI披露與MIT／CC BY 4.0範圍維持 [PROVENANCE.md](../PROVENANCE.md)。Modrinth 與 Nexus Mods 的可下載版本及上架／審核狀態以各平台官方頁面為準；草稿或檔案上傳不等於核准。使用者指定暫緩 CurseForge，不再嘗試登入。
+
+## 0.2.0 Beta：已公開的歷史紀錄
+
+The first public beta is available on GitHub. Version 0.1.0 was an internal development build; other mod-sharing platforms have not yet approved or published the project.
+
+### English
 
 Bring I Ching casting, classical texts and a 64-hexagram collection into Minecraft.
 
@@ -23,7 +67,7 @@ The eight-entry, one-page menu was seen in game. An earlier real mouse-drag sequ
 
 By **poplolioi11 / Yigua yigua.art**. New code and project artwork use MIT; ancient text is public domain, while original data annotations and gameplay explanations use CC BY 4.0. Most implementation and descriptive text were written with generative AI; eleven base item assets used image generation, while the Taiji and listing icon are rendered programmatically by AI-authored generators. No AI service is required during play. See [provenance](../PROVENANCE.md), [artwork credits](ASSETS.md) and [the player's guide](GETTING_STARTED.md).
 
-## 繁體中文
+### 繁體中文
 
 把《易經》起卦、古籍閱讀與六十四卦收藏帶進 Minecraft。
 

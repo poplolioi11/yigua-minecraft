@@ -65,8 +65,12 @@ public final class YiguaMod implements ModInitializer {
         Library.load();
         CastingProgressPayload.init();
         SkyOmenPayload.init();
+        InsightPayload.init();
+        PhoenixFlightPayload.init();
         TaijiPanelPayload.init();
         SpecialEvents.init();
+        TemporaryObstruction.init();
+        TemporalRegression.init();
         ManualCasting.setProgressListener((player, progress) -> new CastingProgressPayload(
             progress.method(), progress.manual(), progress.line(), progress.change(), progress.remaining(),
             progress.lines(), progress.coins(), progress.active(), progress.hint(), progress.visualItemId()).send(player));
@@ -137,8 +141,9 @@ public final class YiguaMod implements ModInitializer {
             for (Item item : allItems()) entries.accept(item);
         });
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            CastingRitual.clear(); OxygenPenalty.clear(); DirectionalGuidance.clear(); SpecialEvents.clear();
+            CastingRitual.clear(); OxygenPenalty.clear(); DirectionalGuidance.clear(); SpecialEvents.clear(); TemporalInsight.clear();
             TemporaryWaterCorridor.load(server, server.getWorldPath(LevelResource.ROOT));
+            TemporaryObstruction.load(server, server.getWorldPath(LevelResource.ROOT));
             ManualCasting.clear();
             PENDING_BOOKS.clear();
             ledger = new PlayerLedger(server);
@@ -147,6 +152,7 @@ public final class YiguaMod implements ModInitializer {
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             TemporaryWaterCorridor.restoreAll(server);
+            TemporaryObstruction.restoreAll(server);
             GroupSharing.clear(server);
             if (ledger != null) ledger.save();
             if (partyLedger != null) partyLedger.save();
@@ -155,6 +161,8 @@ public final class YiguaMod implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             CastingRitual.clear(); OxygenPenalty.clear(); DirectionalGuidance.clear(); SpecialEvents.clear(); ManualCasting.clear(); PENDING_BOOKS.clear(); ledger = null;
             TemporaryWaterCorridor.clear();
+            TemporaryObstruction.clear();
+            TemporalInsight.clear();
             GroupSharing.clear(server); partyLedger = null;
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -186,11 +194,15 @@ public final class YiguaMod implements ModInitializer {
                     }
                 }
                 OxygenPenalty.tick(player, airLoss);
+                directionStrength = Math.max(directionStrength, SpecialEvents.divineDirection(player));
                 DirectionalGuidance.tick(player, directionStrength);
             }
             GroupSharing.tick(server, ledger, partyLedger);
             SpecialEvents.tick(server);
+            TemporalInsight.tick(server);
+            PhoenixFlight.tick(server);
             TemporaryWaterCorridor.tick(server);
+            TemporaryObstruction.tick(server);
             ManualCasting.tick(server);
             CastingRitual.tick(server);
             tickBookOpenings(server);
@@ -206,6 +218,8 @@ public final class YiguaMod implements ModInitializer {
             }
         });
         ServerPlayerEvents.LEAVE.register(player -> {
+            TemporalInsight.cancel(player);
+            PhoenixFlight.cancel(player);
             GroupSharing.clear(player);
             CastingRitual.cancel(player.getUUID());
             OxygenPenalty.cancel(player.getUUID());
@@ -373,6 +387,7 @@ public final class YiguaMod implements ModInitializer {
             // 方塊權限沒有通用查詢協定；獨立伺服器預設不改地形，由服主明確開啟。
             worldChangesEnabled = o.has("world_changes_enabled") ? o.get("world_changes_enabled").getAsBoolean()
                 : FabricLoader.getInstance().getEnvironmentType() == net.fabricmc.api.EnvType.CLIENT;
+            WorldChangePolicy.configure(worldChangesEnabled);
             protectedAttributes = protectionList(o, "protected_attributes", true);
             protectedEffects = protectionList(o, "protected_effects", false);
         } catch (IOException | RuntimeException e) {
@@ -390,7 +405,8 @@ public final class YiguaMod implements ModInitializer {
             String name = value.getAsString();
             if (attributes ? Identifier.tryParse(name) == null
                     : !(Library.profiles().contains(name) || Arrays.stream(SpecialFortune.Event.values())
-                        .anyMatch(event -> event != SpecialFortune.Event.NONE && event.name().toLowerCase(Locale.ROOT).equals(name)))) {
+                        .anyMatch(event -> event != SpecialFortune.Event.NONE && event.name().toLowerCase(Locale.ROOT).equals(name))
+                        || (Identifier.tryParse(name) != null && BuiltInRegistries.MOB_EFFECT.containsKey(Identifier.tryParse(name))))) {
                 throw new IllegalArgumentException(key + " 含無效名稱：" + name);
             }
             names.add(name);
@@ -404,11 +420,62 @@ public final class YiguaMod implements ModInitializer {
     }
 
     public static boolean specialAllowed(SpecialFortune.Event event) {
-        return effectsEnabled && specialEventsEnabled && (event != SpecialFortune.Event.SEA || worldChangesEnabled)
+        return effectsEnabled && specialEventsEnabled
+            && ((event != SpecialFortune.Event.SEA && event != SpecialFortune.Event.OBSTRUCTION) || worldChangesEnabled)
             && !effectProtected(event.name().toLowerCase(Locale.ROOT));
     }
 
     public static boolean sharingEnabled() { return effectsEnabled && groupSharingEnabled; }
+
+    /** 尊重整合包明訂的重力及墜落保護；鳳凰演出可獨立保留。 */
+    static boolean phoenixFlightAllowed() {
+        return specialAllowed(SpecialFortune.Event.BIRDS)
+            && !protectedAttributes.contains(Attributes.GRAVITY.unwrapKey().orElseThrow().identifier().toString())
+            && !protectedAttributes.contains(Attributes.FALL_DAMAGE_MULTIPLIER.unwrapKey().orElseThrow().identifier().toString());
+    }
+
+    /** 全套原版正面狀態及一卦一般正面效果；不觸碰第三方狀態或已存在同名狀態。 */
+    static List<Holder<MobEffect>> divineBlessings(ServerPlayer player) {
+        if (!specialAllowed(SpecialFortune.Event.DIVINE)) return List.of();
+        List<Holder<MobEffect>> result = new ArrayList<>();
+        for (var holder : BuiltInRegistries.MOB_EFFECT.listElements().toList()) {
+            if (nativeBlessingAllowed(player, holder)) result.add(holder);
+        }
+        for (String profile : Library.generalProfiles()) {
+            Holder<MobEffect> holder = EFFECTS.get(profile);
+            if (holder == null || !holder.value().isBeneficial() || effectProtected(profile)) continue;
+            boolean alreadyActive = EFFECTS.entrySet().stream()
+                .anyMatch(entry -> (entry.getKey().equals(profile) || entry.getKey().startsWith(profile + "_x")) && player.hasEffect(entry.getValue()));
+            if (!alreadyActive) result.add(holder);
+        }
+        return List.copyOf(result);
+    }
+
+    static boolean nativeBlessingAllowed(ServerPlayer player, Holder<MobEffect> holder) {
+        Identifier name = holder.unwrapKey().map(key -> key.identifier()).orElse(null);
+        if (name == null || !name.getNamespace().equals("minecraft") || !holder.value().isBeneficial()
+                || protectedEffects.contains(name.toString()) || nativeSemanticsProtected(name.getPath())
+                || player.hasEffect(holder)) return false;
+        boolean[] protectedModifier = {false};
+        holder.value().createModifiers(0, (attribute, modifier) -> {
+            if (protectedAttributes.contains(attribute.unwrapKey().orElseThrow().identifier().toString())) protectedModifier[0] = true;
+        });
+        return !protectedModifier[0];
+    }
+
+    private static boolean nativeSemanticsProtected(String effect) {
+        // 有些原版狀態直接參與行為公式，沒有 MobEffect attribute modifier。
+        Map<String, List<Holder<Attribute>>> semantic = Map.of(
+            "haste", List.of(Attributes.BLOCK_BREAK_SPEED, Attributes.ATTACK_SPEED),
+            "conduit_power", List.of(Attributes.BLOCK_BREAK_SPEED, Attributes.SUBMERGED_MINING_SPEED, Attributes.OXYGEN_BONUS),
+            "jump_boost", List.of(Attributes.JUMP_STRENGTH),
+            "dolphins_grace", List.of(Attributes.MOVEMENT_SPEED),
+            "slow_falling", List.of(Attributes.GRAVITY, Attributes.FALL_DAMAGE_MULTIPLIER),
+            "water_breathing", List.of(Attributes.OXYGEN_BONUS),
+            "fire_resistance", List.of(Attributes.BURNING_TIME));
+        return semantic.getOrDefault(effect, List.of()).stream().anyMatch(attribute ->
+            protectedAttributes.contains(attribute.unwrapKey().orElseThrow().identifier().toString()));
+    }
 
     private static List<Library.Rule> currentRules(PlayerLedger.State state) {
         if (state.remainingTicks <= 0) return List.of();
@@ -427,7 +494,7 @@ public final class YiguaMod implements ModInitializer {
     }
     private static boolean authorizeTaiji(ServerPlayer player) {
         if (canUseTaiji(player) && taijiHeld(player)) return true;
-        player.sendSystemMessage(Component.literal("太極工具需手持使用：創造模式，或正式收集全64卦及32種一般、8種秘效成就後解鎖。")); return false;
+        player.sendSystemMessage(Component.literal("太極工具需手持使用：創造模式，或正式收集全64卦及32種一般、9種秘效成就後解鎖。")); return false;
     }
     private static int openTaiji(ServerPlayer player) {
         if (!authorizeTaiji(player)) return 0;
@@ -502,7 +569,10 @@ public final class YiguaMod implements ModInitializer {
         }
         clearFortune(player, false, true);
         PlayerLedger.State state = ledger.state(player.getUUID()); state.controlledEffect = profile; state.taijiSelected = true;
-        state.remainingTicks = event == null ? 12000 : 400; ledger.markDirty(); ledger.save();
+        state.remainingTicks = event == null ? 12000
+            : event == SpecialFortune.Event.OBSTRUCTION ? SpecialEventPlan.OBSTRUCTION_TICKS
+            : event == SpecialFortune.Event.THUNDER ? SpecialEventPlan.THUNDER_VISUAL_TICKS : SpecialEventPlan.AURA_TICKS;
+        ledger.markDirty(); ledger.save();
         if (event == null) applyEffects(player, List.of(controlledRule(profile)), 12000);
         else { applyEffects(player, List.of(), 0); SpecialEvents.apply(player, event); }
         GroupSharing.tick(player.level().getServer(), ledger, partyLedger);

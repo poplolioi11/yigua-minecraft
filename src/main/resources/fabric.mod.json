@@ -8,6 +8,7 @@
   "contact": {"homepage": "https://yigua.art/"},
   "license": "MIT",
   "environment": "*",
+  "mixins": ["yigua.advancement.mixins.json"],
   "entrypoints": {
     "main": ["art.yigua.minecraft.YiguaMod"],
     "client": ["art.yigua.minecraft.client.YiguaClient"]

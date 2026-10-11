@@ -4,7 +4,7 @@ import art.yigua.core.CastResult;
 
 /** 書外的遊戲事件另抽一次；手動可選分堆，也不能保證取得極端獎懲。 */
 public final class SpecialFortune {
-    public enum Event { NONE, DIVINE, THUNDER, UNDYING, FIVE_QI, FLOWERS, BIRDS, RAPPORT, SEA }
+    public enum Event { NONE, DIVINE, THUNDER, UNDYING, FIVE_QI, FLOWERS, BIRDS, RAPPORT, SEA, OBSTRUCTION }
     public static final int DRAW_SIZE = 4096;
     private SpecialFortune() {}
 
@@ -12,7 +12,10 @@ public final class SpecialFortune {
         if (draw < 0 || draw >= DRAW_SIZE) throw new IllegalArgumentException("事件抽樣超出範圍");
         if (!fortune.rare() || cast.changingLines().size() != 6) return Event.NONE;
         if (fortune.rules().stream().allMatch(rule -> rule.amount() < 0)) {
-            return draw == 0 ? Event.THUNDER : Event.NONE;
+            if (draw == 0) return Event.THUNDER;
+            boolean blockedJourney = fortune.rules().stream().anyMatch(rule ->
+                rule.profile().equals("caution") || rule.profile().equals("heavyfeet"));
+            return blockedJourney && draw <= 8 ? Event.OBSTRUCTION : Event.NONE;
         }
         if (fortune.rules().stream().anyMatch(rule -> rule.amount() < 0)) return Event.NONE;
         if (cast.primaryNumber() == 12 && cast.changedNumber() == 11 && draw < 64) return Event.DIVINE;
